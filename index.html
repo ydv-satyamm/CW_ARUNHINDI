@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ultimate Player - Mobile Optimized</title>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<style>
+body { margin:0; font-family:Arial, sans-serif; background:#0f172a; color:white; overflow-x: hidden; }
+header { background:#111827; padding:12px; text-align:center; font-weight: bold; border-bottom: 1px solid #1e293b; }
+
+.container { display:flex; height:calc(100vh - 45px); }
+
+/* Sidebar/Playlist */
+.sidebar {
+    width:300px;
+    background:#020617;
+    overflow-y:auto;
+    border-right: 1px solid #1e293b;
+}
+.lesson {
+    padding:12px 15px;
+    border-bottom:1px solid #1e293b;
+    cursor:pointer;
+    font-size: 14px;
+    transition: 0.2s;
+}
+.lesson:hover { background:#1e293b; }
+.lesson.active { background:#1e293b; border-left: 4px solid #ef4444; color: #ef4444; font-weight: bold; }
+
+/* Main Player Area */
+.main { flex:1; position:relative; display: flex; flex-direction: column; background: #000; }
+
+.video-container { position: relative; width: 100%; flex: 1; background: #000; }
+
+video, iframe {
+    width:100%;
+    height:100%;
+    border:none;
+}
+
+/* Controls & Buttons */
+.controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background: #0f172a;
+    border-top: 1px solid #1e293b;
+}
+
+.nav-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.nav-btn:disabled { background: #334155; cursor: not-allowed; }
+
+/* Overlay UI */
+#watermark {
+    position:absolute;
+    top:20px;
+    left:-200px;
+    font-size:18px;
+    color:red;
+    opacity:0.3;
+    animation: moveText 35s linear infinite;
+    display:none;
+    z-index:99;
+    pointer-events: none;
+}
+
+@keyframes moveText {
+    0% { left:-200px; top:10%; }
+    50% { left:70%; top:70%; }
+    100% { left:-200px; top:10%; }
+}
+
+.pdfBtn {
+    position:absolute;
+    top:10px;
+    right:10px;
+    background:#ef4444;
+    color:white;
+    padding:6px 12px;
+    border:none;
+    border-radius: 4px;
+    cursor:pointer;
+    z-index:100;
+}
+
+#qualitySelect {
+    position:absolute;
+    top:10px;
+    left:10px;
+    z-index:100;
+    background:rgba(0,0,0,0.6);
+    color:white;
+    border: 1px solid #334155;
+    padding: 2px;
+}
+
+/* 📱 MOBILE RESPONSIVE CSS */
+@media (max-width: 768px) {
+    .container { flex-direction: column; height: auto; }
+    
+    .video-container { height: 56.25vw; flex: none; } /* 16:9 ratio */
+    
+    .sidebar { width: 100%; height: 350px; border-right: none; }
+    
+    header { font-size: 14px; padding: 10px; }
+    
+    #watermark { font-size: 14px; }
+}
+</style>
+</head>
+
+<body>
+
+<header>🎬 🦋⃟ᴠ‌ɪ‌ᴘ‌✮⃝SATyaM𝄟⃝</header>
+
+<div class="container">
+    <div class="sidebar" id="playlist"></div>
+
+    <div class="main">
+        <div class="video-container">
+            <div id="watermark">सत्यम भैया</div>
+            <video id="video" controls playsinline></video>
+            <iframe id="frame" style="display:none;"></iframe>
+            
+            <button class="pdfBtn" onclick="openPDF()">📄 PDF</button>
+            <select id="qualitySelect"></select>
+        </div>
+
+        <div class="controls-bar">
+            <button id="prevBtn" class="nav-btn" onclick="changeVideo(-1)">⬅ Prev</button>
+            <span id="currentTitle" style="font-size: 12px; color: #94a3b8;">Class 1</span>
+            <button id="nextBtn" class="nav-btn" onclick="changeVideo(1)">Next ➡</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let video = document.getElementById("video");
+let frame = document.getElementById("frame");
+let watermark = document.getElementById("watermark");
+let hls;
+let currentIndex = 0;
+
+// Yahan aapka pura "lessons" data hai (Shortened for preview, but keep your full list)
+const lessons = [
+{title:"Class 1",video:"https://selectionwaylive.hranker.com/561/69705f6a719de161ee0a2fa8/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Basics Lec-1 without annotation.pdf"},
+{title:"Class 2 - Basics",video:"https://selectionwaylive.hranker.com/561/6971a78d719de161ee170c3a/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Basics Lec-2 without annotations.pdf"},
+{title:"Class 3 - Basics",video:"https://selectionwaylive.hranker.com/561/6971fe5f719de161ee2aa8b7/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Basics lec-3 without annotations.pdf"},
+{title:"Class 4 - Basics",video:"https://selectionwaylive.hranker.com/561/69780f6ac566674bff881a43/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Basics lec 04 without annotations.pdf"},
+{title:"Class 5 - Basics",video:"https://selectionwaylive.hranker.com/561/6978e0e7c566674bff8dacc3/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Basics lec- 5 without annotations.pdf"},
+{title:"Class 6 - Basics",video:"https://selectionwaylive.hranker.com/561/697dced14ca8c7fbe8f3099d/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Basics -6 without annotations.pdf"},
+{title:"Class 7 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/6979f771c566674bff976178/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/basics practice sheet.pdf"},
+{title:"Class 8 - Pronoun",video:"https://selectionwaylive.hranker.com/561/697ed49c4ca8c7fbe8f634cd/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-1 without annotations.pdf"},
+{title:"Class 9 - Pronoun",video:"https://selectionwaylive.hranker.com/561/697fa2a84ca8c7fbe8fb19bb/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-2 without annotations.pdf"},
+{title:"Class 10 - Pronoun",video:"https://selectionwaylive.hranker.com/561/6980945d4ca8c7fbe804aa68/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-3 without annotations.pdf"},
+{title:"Class 11 - Pronoun",video:"https://selectionwaylive.hranker.com/561/6982e5524ca8c7fbe81a5881/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-4 without annotations.pdf"},
+{title:"Class 12 - Pronoun",video:"https://selectionwaylive.hranker.com/561/698583fc0df4ffd2b9a7ad79/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-5 without annotations.pdf"},
+{title:"Class 13 - Pronoun",video:"https://selectionwaylive.hranker.com/561/6986fc905b61b5fe00fd17be/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-6 without annotations.pdf"},
+{title:"Class 14 - Pronoun",video:"https://selectionwaylive.hranker.com/561/6989ab175b61b5fe00095993/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-7 without annotations.pdf"},
+{title:"Class 15 - Pronoun",video:"https://selectionwaylive.hranker.com/561/698b7433a003679fb8adc3cd/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-8 without annotations.pdf"},
+{title:"Class 16 - Pronoun",video:"https://selectionwaylive.hranker.com/561/698c7274a003679fb8c1168f/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-9 without annotations.pdf"},
+{title:"Class 17 - Pronoun",video:"https://selectionwaylive.hranker.com/561/69904edf466e8361a4fc43be/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-10 without annotations.pdf"},
+{title:"Class 18 - Pronoun",video:"https://selectionwayrecordedmp4.hranker.com/561/699205fae23f1dc0e52c4013/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-11 without annotations.pdf"},
+{title:"Class 19 - Pronoun",video:"https://selectionwaylive.hranker.com/561/6993f509e23f1dc0e53f12b1/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-12 without annotations.pdf"},
+{title:"Class 20 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/69954d85399756d492456f6d/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Pronoun lec-12 without annotations.pdf"},
+{title:"Class 21 - Adjective",video:"https://selectionwaylive.hranker.com/561/6995895d399756d4924aecc0/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Adjective lec-1 without annotations.pdf"},
+{title:"Class 22 - Adjective",video:"https://selectionwaylive.hranker.com/561/699d4272a746ce3726782200/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Adjective lec-2 without annotations.pdf"},
+{title:"Class 23 - Adjective",video:"https://selectionwaylive.hranker.com/561/699e8245399756d492a46190/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Adjective lec-3 without annotations.pdf"},
+{title:"Class 24 - Adjective",video:"https://selectionwaylive.hranker.com/561/699fad57a2b1ae043315764d/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Adjective lec-4 without annotations.pdf"},
+{title:"Class 25 - Adjective",video:"https://selectionwaylive.hranker.com/561/69a8e4eda2b1ae04333d36bb/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Adjective lec-5 without annotations.pdf"},
+{title:"Class 26 -Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/6919d6e7932c0deb706bb0ec/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Adjective Practice sheet.pdf"},
+{title:"Class 27 - Verb",video:"https://selectionwaylive.hranker.com/561/69a9ce53a2b1ae04334229e9/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Verb lec-1 without annotations.pdf"},
+{title:"Class 28 - Verb",video:"https://selectionwaylive.hranker.com/561/69ab1c0ea2b1ae04334d8743/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Verb lec-2 without annotations.pdf"},
+{title:"Class 29 - Verb",video:"https://selectionwaylive.hranker.com/561/69adc9f8a2b1ae04336f9bce/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Verb lec-3 without annotations.pdf"},
+{title:"Class 30 - Modal",video:"https://selectionwaylive.hranker.com/561/69af6be4a2b1ae0433a83f18/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Modal lec-1 without annotations.pdf"},
+{title:"Class 31 - Modal",video:"https://selectionwaylive.hranker.com/561/69b100c29d14466cd09eccf6/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/MODEL LEC-2 WITHOUT ANNOTATION.pdf"},
+{title:"Class 32 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/69280c27dd258fd3231aa7a3/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Class -4 Practice sheet.pdf"},
+{title:"Class 33 - Noun",video:"https://selectionwaylive.hranker.com/561/69b307f49d14466cd0c0ed20/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Noun lec-1 without annotations.pdf"},
+{title:"Class 34 - Noun",video:"https://selectionwayrecordedmp4.hranker.com/561/69b794c0fe7c902399696c12/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Noun lec-2 without annotations.pdf"},
+{title:"Class 35 - Noun",video:"https://selectionwaylive.hranker.com/561/69b75fb29d14466cd0e74014/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Noun lec-3 without annotations.pdf"},
+{title:"Class 36 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/692d2ab3dd258fd32334a664/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/NOUN PRACTICE SHEET.pdf"},
+{title:"Class 37 - Adverb",video:"https://selectionwaylive.hranker.com/561/69b8e200dbf4fa27cf79a4d3/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Adverb lec-1 without annotations.pdf"},
+{title:"Class 38 - Adverb",video:"https://selectionwaylive.hranker.com/561/69ba3115a96048112f41f6c4/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Adverb lec-2 without annotations.pdf"},
+{title:"Class 39 - Adverb",video:"https://selectionwaylive.hranker.com/561/69bbc60c02b07cbc32f64986/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Adverb lec-3 without annotations _.pdf"},
+{title:"Class 40 - Inversion",video:"https://selectionwaylive.hranker.com/561/69bde311713c8e763d5c1ec6/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Inversion + Pr subj mood without annotations (1).pdf"},
+{title:"Class 41 - Practice",video:"https://selectionwaylive.hranker.com/561/68ff9645f179b935b1fb7b1c/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/CLASS-41 PRACTICE SHEET.pdf"},
+{title:"Class 42 - Article",video:"https://selectionwaylive.hranker.com/561/6937f3b86385517afaa6f2a1/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Articles lec-1 without annotations.pdf"},
+{title:"Class 43 - Article",video:"https://selectionwaylive.hranker.com/561/69393a9a6385517afaed9a74/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Articles lec-2 without annotations.pdf"},
+{title:"Class 44 - Practice",video:"https://selectionwaylive.hranker.com/561/69022920f48d1caffd7aeab6/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/class 45 article practice sheet..pdf"},
+{title:"Class 45 - SVA",video:"https://selectionwaylive.hranker.com/561/693c02e46385517afa4cfcb9/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/sub verb agreement -1 without annotations.pdf"},
+{title:"Class 46 - SVA",video:"https://selectionwaylive.hranker.com/561/693d10086385517afaba425e/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Class 46 SVA without annotations.pdf"},
+{title:"Class 47 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/694107c46385517afa16aa1c/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/CLASS 46 SUBJECT VARB AGREEMENT SHEET.pdf"},
+{title:"Class 48 - Tense",video:"https://selectionwaylive.hranker.com/561/693ff7866385517afafc1b5d/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Tense lec -1 without annotations.pdf"},
+{title:"Class 49 - Tense",video:"https://selectionwaylive.hranker.com/561/69411fc46385517afaf5b93a/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Tense lec -2 without annotations.pdf"},
+{title:"Class 50 - Tense",video:"https://selectionwaylive.hranker.com/561/6943e3fc6385517afa5f1a20/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Tense lec -3 without annotations.pdf"},
+{title:"Class 51 - Tense",video:"https://selectionwaylive.hranker.com/561/6948dedd6bcc97e09edd95d2/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Tense lec -4 without annotations.pdf"},
+{title:"Class 52 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/694bb86c2feca20f817b8cce/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/CLASS-52_PRACTICE_SHEET Tense.pdf"},
+{title:"Class 53 - Conjunction",video:"https://selectionwaylive.hranker.com/561/69497f32b38db8674beacf4b/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Conjunction lec -1 without annotations.pdf"},
+{title:"Class 54 - Conjunction",video:"https://selectionwaylive.hranker.com/561/694a8e74b38db8674b9ed74a/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Conjunction lec 02 without annotations.pdf"},
+{title:"Class 55 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/694bb8cf2feca20f817bc240/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/CLASS-55 PRACTICE SHEET.pdf"},
+{title:"Class 56 - Preposition",video:"https://selectionwaylive.hranker.com/561/69517bf7b54cadeb6180c79e/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Preposition lec 01 without annotations.pdf"},
+{title:"Class 57 - Preposition",video:"https://selectionwayrecordedmp4.hranker.com/561/695dfe302feca20f81d5b0c2/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Preposition lec -2 without annotations.pdf"},
+{title:"Class 58 - Preposition",video:"https://selectionwaylive.hranker.com/561/6961308b2feca20f81f6f479/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Preposition lec 03 without annotations.pdf"},
+{title:"Class 59 - Preposition",video:"https://selectionwaylive.hranker.com/561/6963f77e2feca20f8104015e/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Preposition lec 04 without annotations.pdf"},
+{title:"Class 60 - Preposition",video:"https://selectionwayrecordedmp4.hranker.com/561/6978ab315e68369d734b8e27/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Preposition Practice sheet.pdf"},
+{title:"Class 61 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/696607172feca20f81166077/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/MAINS CLASS-19 PRACTICE SHEET.pdf"},
+{title:"Class 62 - Advance Verb",video:"https://selectionwaylive.hranker.com/561/6964b46c2feca20f81079dfb/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Advance verb lec -1 without annotations.pdf"},
+{title:"Class 63 - Advance Verb",video:"https://selectionwaylive.hranker.com/561/69668bec2feca20f811a8f61/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Advance verb lec -2 without annotations.pdf"},
+{title:"Class 64 - Advance Verb",video:"https://selectionwaylive.hranker.com/561/6967d9952feca20f811f808d/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Advance verb lec -3 without annotations.pdf"},
+{title:"Class 65 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/696b277d719de161eee9107f/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Advance Practice sheet 01.pdf"},
+{title:"Class 66 - Question Tag",video:"https://selectionwaylive.hranker.com/561/696f0a94719de161eef9d696/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Question tag without annotations.pdf"},
+{title:"Class 67 - Superfluous",video:"https://selectionwaylive.hranker.com/561/696fd362719de161ee08cb16/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Superfluous without annotations.pdf"},
+{title:"Class 68 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/6976319bb24c88bac185bd20/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Q T and superfluous practice sheet.pdf"},
+{title:"Class 69 - Conditional",video:"https://selectionwaylive.hranker.com/561/6971fdf8719de161ee2a7333/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/conditionals without annotations.pdf"},
+{title:"Class 70 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/6975a8916bf353b6dca80cb8/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/conditional practice sheet.pdf"},
+{title:"Class 71 - Voice",video:"https://selectionwaylive.hranker.com/561/6978e0abc566674bff8d9104/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/voice lec-1 without annotations.pdf"},
+{title:"Class 72 - Voice",video:"https://selectionwaylive.hranker.com/561/6979ccb7c566674bff94ec26/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/voice lec-2 without annotations.pdf"},
+{title:"Class 73 - Voice",video:"https://selectionwayrecordedmp4.hranker.com/561/6980798f4ca8c7fbe8023bd2/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/voice lec-3 without annotations.pdf"},
+{title:"Class 74 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/6981cf3b4ca8c7fbe8133478/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/ACTIVE AND PASSIVE VOICE PRACTICE SHEET.pdf"},
+{title:"Class 75 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/69822c0ac40b4c4cef6d654a/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Active and passive voice practice sheet -2.pdf"},
+{title:"Class 76 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/69819e4a4ca8c7fbe80d425e/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Voice practice sheet.pdf"},
+{title:"Class 77 - Narration",video:"https://selectionwaylive.hranker.com/561/698477aafdd21a8a2d17d3f4/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Narration lec-1 without annotations.pdf"},
+{title:"Class 78 - Narration",video:"https://selectionwaylive.hranker.com/561/6985c4010df4ffd2b9afb035/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Narration lec-2 without annotations.pdf"},
+{title:"Class 79 - Narration",video:"https://selectionwaylive.hranker.com/561/6989aad75b61b5fe00093a96/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Narration lec-3 without annotations.pdf"},
+{title:"Class 80 - Practice",video:"https://selectionwaylive.hranker.com/561/698b73efa003679fb8ada466/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Narrations practice sheet.pdf"},
+{title:"Class 81 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/698c7220a003679fb8c0f6da/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/narration practice sheet.pdf"},
+{title:"Class 82 - Practice",video:"https://selectionwayrecordedmp4.hranker.com/561/698ec8468f7f447d56330ba9/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/narration practice sheet final.pdf"},
+{title:"Class 83 - Parts of Speech",video:"https://selectionwayrecordedmp4.hranker.com/561/69900438466e8361a4f6afb9/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/PARTS OF SPEECH SHEET.pdf"},
+{title:"Class 84 - Clauses",video:"https://selectionwayrecordedmp4.hranker.com/561/699022df466e8361a4f9892b/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Types of clauses practice sheet.pdf"},
+{title:"Class 85 - Figure of Speech",video:"https://selectionwayrecordedmp4.hranker.com/561/699022f9466e8361a4f9a995/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Figure of speech concise pdf.pdf"},
+{title:"Class 86 - Sentences",video:"https://selectionwayrecordedmp4.hranker.com/561/6990537d466e8361a4fc8755/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Types of sentences concise pdf.pdf"},
+{title:"Class 87 - Transformation",video:"https://selectionwayrecordedmp4.hranker.com/561/6992059fe23f1dc0e52c1f73/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Transformation-1 concise pdf.pdf"},
+{title:"Class 88 - Transformation",video:"https://selectionwaylive.hranker.com/561/69934904e23f1dc0e53c7bdf/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/TRANSFORMATION-02 .pdf"},
+{title:"Class 89 - Transformation",video:"https://selectionwayrecordedmp4.hranker.com/561/69958900399756d4924acae5/hls/master.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/Transformation concise -3.pdf"},
+{title:"Class 90 - Transformation",video:"https://selectionwaylive.hranker.com/561/69993c4d399756d4926fd544/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/TRANSFORMATION-4.pdf"},
+{title:"Class 91 - Transformation",video:"https://selectionwaylive.hranker.com/561/699959a9399756d492748ceb/playlist-mpl-vod.m3u8",pdf:"https://selectionwayserver.hranker.com/pdfs/files/TRANSFORMATION-5 SLIDES.pdf"},
+];
+
+// Playlist generate
+lessons.forEach((l,i)=>{
+    let div=document.createElement("div");
+    div.className="lesson";
+    div.id = "lesson-" + i;
+    div.innerText=l.title;
+    div.onclick=()=>loadVideo(i);
+    document.getElementById("playlist").appendChild(div);
+});
+
+function loadVideo(i){
+    currentIndex=i;
+
+    // Highlight active lesson
+    document.querySelectorAll('.lesson').forEach(el => el.classList.remove('active'));
+    document.getElementById("lesson-" + i).classList.add('active');
+    document.getElementById("currentTitle").innerText = lessons[i].title;
+
+    // Navigation buttons state
+    document.getElementById("prevBtn").disabled = (i === 0);
+    document.getElementById("nextBtn").disabled = (i === lessons.length - 1);
+
+    // Stop old video
+    if(hls){ hls.destroy(); }
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    frame.src = "about:blank";
+    frame.style.display = "none";
+
+    let src = lessons[i].video;
+
+    // iframe case (recordedmp4)
+    if(src.includes("recordedmp4")){
+        video.style.display="none";
+        frame.style.display="block";
+        frame.src = src;
+        watermark.style.display="block";
+        return;
+    }
+
+    // normal video
+    video.style.display="block";
+
+    if(Hls.isSupported()){
+        hls = new Hls();
+        hls.loadSource(src);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            let select = document.getElementById("qualitySelect");
+            select.innerHTML = '<option value="-1">Auto Quality</option>';
+            hls.levels.forEach((level, index) => {
+                let option = document.createElement("option");
+                option.value = index;
+                option.text = level.height + "p";
+                select.appendChild(option);
+            });
+            video.play();
+        });
+    } else {
+        video.src = src;
+        video.play();
+    }
+}
+
+function changeVideo(step) {
+    let newIndex = currentIndex + step;
+    if(newIndex >= 0 && newIndex < lessons.length) {
+        loadVideo(newIndex);
+        // Scroll to active lesson in sidebar
+        document.getElementById("lesson-" + newIndex).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+document.getElementById("qualitySelect").onchange = function(){
+    if(hls){ hls.currentLevel = this.value; }
+};
+
+video.addEventListener("play", ()=> watermark.style.display="block");
+video.addEventListener("pause", ()=> watermark.style.display="none");
+
+function openPDF(){
+    window.open(lessons[currentIndex].pdf, '_blank');
+}
+
+// Initial Load
+loadVideo(0);
+</script>
+
+</body>
+</html>
