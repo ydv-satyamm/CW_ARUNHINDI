@@ -294,9 +294,19 @@ function loadVideo(i){
     video.style.display="block";
 
     if(Hls.isSupported()){
-        hls = new Hls();
-        hls.loadSource(src);
-        hls.attachMedia(video);
+
+    hls = new Hls({
+        xhrSetup: function (xhr) {
+            xhr.withCredentials = true;
+        }
+    });
+
+    hls.on(Hls.Events.ERROR, function (event, data) {
+        console.log("HLS ERROR:", data);
+    });
+
+    hls.loadSource(src);
+    hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, function () {
             let select = document.getElementById("qualitySelect");
             select.innerHTML = '<option value="-1">Auto Quality</option>';
