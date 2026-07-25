@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -346,7 +345,50 @@ style="margin:15px auto;display:block;padding:10px 20px;border:none;border-radiu
             controlBar.el().insertBefore(skipBackward, controlBar.getChild('playToggle').el().nextSibling);
             controlBar.el().insertBefore(skipForward, controlBar.getChild('progressControl').el().nextSibling);
         });
-        function playVideo(url) {
+        
+        // 👇 IS JAGAH PASTE KARNA HAI
+
+const video = player.el().querySelector("video");
+if (video) {
+
+let lastTap = 0;
+
+video.addEventListener("touchend", function(e) {
+    const now = Date.now();
+
+    if (now - lastTap < 300) {
+        const x = e.changedTouches[0].clientX;
+
+        if (x < window.innerWidth / 2) {
+            player.currentTime(player.currentTime() - 10);
+        } else {
+            player.currentTime(player.currentTime() + 10);
+        }
+    }
+
+    lastTap = now;
+});
+
+}
+let lastTap = 0;
+
+video.addEventListener("touchend", function(e) {
+    const now = Date.now();
+
+    if (now - lastTap < 300) {
+        const x = e.changedTouches[0].clientX;
+
+        if (x < window.innerWidth / 2) {
+            player.currentTime(player.currentTime() - 10);
+        } else {
+            player.currentTime(player.currentTime() + 10);
+        }
+    }
+
+    lastTap = now;
+});
+
+function playVideo(url) {
             if (url.includes('.m3u8')) {
                 document.getElementById('video-player').style.display = 'block';
                 player.src({ src: url, type: 'application/x-mpegURL' });
